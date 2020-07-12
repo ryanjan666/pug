@@ -1,0 +1,133 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"><title>電子發票證明聯</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css"><style>[v-cloak] {
+  display: none; }
+
+#inv {
+  width: 300px;
+  border: 2px solid black;
+  padding: 28px; }
+  #inv .inv-header {
+    font-weight: bold; }
+    #inv .inv-header #seller {
+      font-size: 20px; }
+    #inv .inv-header #title {
+      font-size: 30px; }
+    #inv .inv-header #peroid, #inv .inv-header #id {
+      font-size: 35px;
+      line-height: 1.05; }
+  #inv .inv-body {
+    font-size: .8rem; }
+  #inv #barcode-1d img {
+    width: 100%; }
+  #inv #barcode-2d {
+    margin-top: 20px; }
+    #inv #barcode-2d .qr {
+      width: 105px;
+      display: inline-block; }
+</style></head><body><div class="container-fluid my-3"><div class="text-monospace" id="inv"><div class="inv-header text-center"><div id="seller">公司名稱</div><div id="title">電子發票證明聯</div><div id="peroid"></div><div id="id"></div></div><div class="inv-body"><div id="date"></div><div class="row"><div class="col"><div id="check">隨機碼</div><div id="seller-id">賣方</div></div><div class="col"><div id="total-amount">總計</div><div id="buyer-id"></div></div></div></div><div class="my-2" id="barcode-1d"><img id="code39"></div><div class="row text-center" id="barcode-2d"><div class="col text-right"><div class="qr" id="qr1"></div></div><div class="col text-left"><div class="qr" id="qr2"></div></div></div></div></div><script src="https://cdn.jsdelivr.net/npm/@hapi/joi@17/dist/joi-browser.min.js"></script><script src="https://cdn.jsdelivr.net/npm/bwip-js@2/dist/bwip-js.min.js"></script><script src="https://cdn.jsdelivr.net/npm/js-base64@2/base64.min.js"></script><script src="https://cdn.jsdelivr.net/npm/lodash@4/lodash.min.js"></script><script src="https://cdn.jsdelivr.net/npm/moment@2/moment.min.js"></script><script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script><script>/* global bwipjs, QRCode, Base64 */
+const getQuery = (() => {
+  const params = new URL(location).searchParams
+  return k => params.get(k)
+})()
+
+const domById = k => window.document.getElementById(k)
+const encodeBase64url = str => Base64.encode(str).replace(/[+/=]/g, c => _.get({ '+': '-', '/': '_', '=': '' }, c)) // eslint-disable-line
+const joiFn = (schema, options) => value => schema.validateAsync(value, options)
+const pad0 = (v, n) => _.padStart(v, n, '0')
+
+// 檢查發票的格式
+const invChecker = joiFn(joi.object({
+  buyerId: joi.string().regex(/^\d{8}$/).required(),
+  check: joi.string().regex(/^\d{4}$/).required(),
+  custom: joi.string().length(10).required(),
+  date: joi.date().timestamp('unix').required(),
+  encrypt: joi.string().base64({ paddingRequired: true }).length(24).required(),
+  id: joi.string().regex(/^[A-Z]{2}\d{8}$/).required(),
+  salesAmount: joi.number().integer().min(0).required(),
+  seller: joi.string().required(),
+  sellerId: joi.string().regex(/^\d{8}$/).required(),
+  totalAmount: joi.number().integer().min(joi.ref('salesAmount')).required(),
+  details: joi.array().items(joi.object({
+    name: joi.string().required(),
+    quantity: joi.number().integer().min(0).required(),
+    price: joi.number().integer().min(0).required(),
+  }).required()).required(),
+}), { stripUnknown: true })
+
+const formatPeriod = date => {
+  let [y, m] = [date.year() - 1911, date.month() + 1]
+  if (m % 2) m++
+  return `${y}年${pad0(m - 1, 2)}-${pad0(m, 2)}月`
+}
+
+const formatCode39 = inv => {
+  const date = inv.date
+  const [y, m] = [date.year() - 1911, date.month() + 1]
+  const ym = `${y}${pad0(m + m % 2, 2)}`
+  const text = `${ym}${inv.id}${inv.check}`
+  const canvas = document.createElement('canvas')
+  bwipjs.toCanvas(canvas, {
+    bcid: 'code39',
+    height: 15,
+    includecheck: false,
+    includetext: false,
+    text,
+  })
+  return canvas.toDataURL('image/png')
+}
+
+const formatQr = inv => {
+  const parts = []
+
+  // part 1
+  parts.push(_.map(['id', 'date', 'check', 'salesAmount', 'totalAmount', 'buyerId', 'sellerId', 'encrypt'], k => {
+    if (k === 'date') return `${inv[k].year() - 1911}${inv[k].format('MMDD')}`
+    if (_.includes(['salesAmount', 'totalAmount'], k)) return pad0(inv[k].toString(16), 8)
+    return inv[k]
+  }).join(''))
+
+  parts.push(inv.custom)
+  parts.push(inv.details.length) // 二維條碼記載完整品目筆數
+  parts.push(inv.details.length) // 該張發票交易品目總筆數
+  parts.push(1) // UTF-8
+
+  _.each(inv.details, item => {
+    parts.push(`${item.name}:${item.quantity}:${item.price}`)
+  })
+
+  return parts.join(':')
+}
+
+const textToQrSvg = (() => {
+  const config = {
+    version: 6,
+    errorCorrectionLevel: 'L',
+    margin: 0,
+  }
+  return text => QRCode.toString(text, config)
+})()
+
+;(async () => {
+  try {
+    // parse invonce
+    let inv = getQuery('inv')
+    if (!inv) throw new Error('inv is required')
+    inv = await invChecker(JSON.parse(Base64.decode(inv)))
+    inv.date = moment(inv.date).utcOffset(8)
+    console.log(inv)
+
+    // 設定頁面上顯示的資料
+    domById('seller').textContent = inv.seller
+    domById('peroid').textContent = formatPeriod(inv.date)
+    domById('id').textContent = inv.id.replace(/^([A-Z]{2})/, '$1-')
+    domById('date').textContent = inv.date.format('YYYY-MM-DD HH:mm:ss')
+    domById('check').textContent = `隨機碼 ${inv.check}`
+    domById('seller-id').textContent = `賣方 ${inv.sellerId}`
+    domById('total-amount').textContent = `總計 ${inv.totalAmount}`
+    if (inv.buyerId !== '00000000') domById('buyer-id').textContent = `買方 ${inv.buyerId}`
+    domById('code39').src = formatCode39(inv)
+    domById('qr1').innerHTML = await textToQrSvg(formatQr(inv))
+    domById('qr2').innerHTML = await textToQrSvg('**')
+  } catch (err) {
+    console.error(err)
+  }
+})()</script></body></html>

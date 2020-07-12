@@ -1,0 +1,71 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"><title>在 LIFF 傳送隱藏資料</title><script async src="https://www.googletagmanager.com/gtag/js?id=UA-39556213-3"></script><script>window.dataLayer = window.dataLayer || []
+function gtag () { dataLayer.push(arguments) } // eslint-disable-line
+gtag('js', new Date())
+gtag('config', 'UA-39556213-3')</script><script>(function () {
+  const hostname = location.host.split(':')[0]
+  if (hostname === 'localhost') document.write(`<script src="http://${hostname}:35729/livereload.js?snipver=1"></` + 'script>')
+})()</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-default@3/default.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/css/bootstrap.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4/css/font-awesome.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1/themes/prism-tomorrow.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@9/dist/sweetalert2.min.css"><style>[v-cloak] {
+  display: none; }
+
+.w-96px {
+  width: 96px;
+  height: 96px; }
+</style></head><body><div class="container text-monospace my-3" id="app" v-cloak><div id="internal" v-if="page==='chat'"><h1 class="text-center">請選擇 sender</h1><div class="card my-3" v-for="sender of senders" @click="selectSender(sender)"><div class="row no-gutters"><img class="card-img w-96px" :src="sender.image"><div class="col"><div class="card-body"><h5 class="mt-0">{{ sender.name }}</h5><small class="text-muted">請點選</small></div></div></div></div></div><div id="external" v-if="page==='non-chat'"><h3 class="text-center my-5">請在聊天視窗內開啟</h3><a class="btn btn-block btn-lg btn-success" href="https://line.me/R/ti/p/%40336zwcug" target="_blank">開啟 LINE</a></div></div><script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jquery@3/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/json5@2/dist/index.min.js"></script><script src="https://cdn.jsdelivr.net/npm/lodash@4/lodash.min.js"></script><script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script><script src="https://cdn.jsdelivr.net/npm/popper.js@1/dist/umd/popper.min.js"></script><script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-core.min.js"></script><script src="https://cdn.jsdelivr.net/npm/prismjs@1/plugins/autoloader/prism-autoloader.min.js"></script><script src="https://cdn.jsdelivr.net/npm/qs@6/dist/qs.min.js"></script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@9"></script><script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.min.js"></script><!-- bootstrap require jquery and pupper--><script src="https://cdn.jsdelivr.net/npm/bootstrap@4/dist/js/bootstrap.min.js"></script><script src="https://cdn.jsdelivr.net/npm/vconsole@3/dist/vconsole.min.js"></script><script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script><script>const vConsole = new VConsole() // eslint-disable-line
+const vm = new Vue({ // eslint-disable-line
+  el: '#app',
+  data: {
+    page: '',
+    senders: [
+      {
+        name: 'Brown',
+        image: 'https://stickershop.line-scdn.net/stickershop/v1/sticker/52002734/iPhone/sticker_key@2x.png',
+      },
+      {
+        name: 'Cony',
+        image: 'https://stickershop.line-scdn.net/stickershop/v1/sticker/52002735/iPhone/sticker_key@2x.png',
+      },
+      {
+        name: 'Sally',
+        image: 'https://stickershop.line-scdn.net/stickershop/v1/sticker/52002736/iPhone/sticker_key@2x.png',
+      },
+    ],
+  },
+  async mounted () {
+    try {
+      await liff.init({ liffId: '1654046335-DzXpM8mx' })
+      if (!liff.isInClient()) throw new Error('liff.isInClient() = false')
+      const contextType = _.get(liff.getContext(), 'type')
+      if (!_.includes(['utou', 'room', 'group', 'square_chat'], contextType)) throw new Error(`liff.getContext().type = ${contextType}`)
+      this.page = 'chat'
+    } catch (err) {
+      this.page = 'non-chat'
+      console.log(err)
+      Swal.fire({
+        icon: 'error',
+        title: '請在聊天視窗內開啟',
+        text: err.message,
+      })
+    }
+  },
+  methods: {
+    async selectSender (sender) {
+      try {
+        const url = new URL('https://i.imgur.com/MwS42AE.png')
+        url.searchParams.set('sender', sender.name)
+        await liff.sendMessages([{
+          type: 'image',
+          originalContentUrl: url.href,
+          previewImageUrl: url.href,
+        }])
+        liff.closeWindow()
+      } catch (err) {
+        console.log(err)
+        Swal.fire({
+          icon: 'error',
+          title: 'sendMessages 失敗',
+          text: err.message,
+        })
+      }
+    },
+  },
+})</script></body></html>
